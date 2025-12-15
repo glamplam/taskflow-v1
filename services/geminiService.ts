@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Task, AnalysisResult } from "../types";
 
-// Safely access API key to prevent runtime ReferenceError if process is not defined
+// Safely access API key
 const getApiKey = () => {
   try {
     if (typeof process !== 'undefined' && process.env) {
@@ -13,7 +13,16 @@ const getApiKey = () => {
   return '';
 };
 
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+// Lazy initialization
+let aiInstance: GoogleGenAI | null = null;
+
+const getAIClient = () => {
+  if (!aiInstance) {
+    const key = getApiKey();
+    aiInstance = new GoogleGenAI({ apiKey: key || 'dummy_key' });
+  }
+  return aiInstance;
+};
 
 const getCommonAnalysisSchema = () => {
   return {
@@ -57,7 +66,7 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
   // Consistency
   const consistency = daysPassed > 0 ? (activeDays / daysPassed) * 100 : 0;
   
-  // Goal Calculations (Weekly based)
+  // Goal Calculations
   const weeklyTarget = task.weeklyDays * task.dailyGoal;
   const expectedTotalToDate = Math.round((daysPassed / 7) * weeklyTarget);
   const gap = totalLogged - expectedTotalToDate;
@@ -68,33 +77,35 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
   const remainingDays = Math.max(0, totalDays - daysPassed);
   const requiredDailyAvg = remainingDays > 0 ? (remainingGoal / remainingDays).toFixed(2) : "N/A";
 
+  // Use pure ASCII for the prompt to avoid encoding SyntaxErrors, but ask for Korean output.
   const prompt = `
-    Analyze the performance of the following task with a professional, analytical, yet encouraging tone.
+    Analyze the performance of the task below.
     Generate the output as structured lists of short sentences (bullet points).
     
-    IMPORTANT: Wrap key numbers, percentages, or status words (like '양호', '부족') in double asterisks like **this** to highlight them.
+    IMPORTANT: Wrap key numbers, percentages, or status words (e.g. 'Good', 'Bad') in double asterisks like **this** to highlight them.
 
     Task Data:
     - Task Name: ${task.name}
     - Period: ${totalDays} days total, ${daysPassed} days passed (${progressPercent.toFixed(1)}%)
     - Performance: ${totalLogged} units done in ${activeDays} active days.
     - Goal: ${task.dailyGoal} units/day, ${task.weeklyDays} days/week.
-    - Expected Progress (Calculated): Should have done approx ${expectedTotalToDate} units by now.
-    - Current Gap: ${gap} units (${gap >= 0 ? 'Ahead' : 'Behind'}).
-    - Consistency: ${consistency.toFixed(1)}% of days active.
-    - Remaining: ${remainingGoal} units needed in ${remainingDays} days.
-    - Required Daily Pace for Remainder: ${requiredDailyAvg} units/day (if working every day).
+    - Expected Progress: Should have done approx ${expectedTotalToDate} units.
+    - Current Gap: ${gap} units.
+    - Consistency: ${consistency.toFixed(1)}% active.
+    - Remaining: ${remainingGoal} units in ${remainingDays} days.
+    - Required Daily Pace: ${requiredDailyAvg} units/day.
 
-    Please provide the response in Korean JSON format with the following 4 arrays:
-    1. "basicAnalysis": 4-5 bullet points summarizing current status (Time passed, total count, active days, consistency).
-    2. "goalPerformance": 4-5 bullet points comparing actual vs expected (Goal count, achievement rate %, gap, efficiency).
-    3. "averageAndPrediction": 4-5 bullet points (Daily average, projected completion, required effort).
-    4. "suggestions": 3-4 concrete, actionable improvement tips.
+    Output Language: KOREAN (Hangul).
 
-    Tone: Analytical, Insightful.
+    Please provide the response in JSON format with the following 4 arrays:
+    1. "basicAnalysis": 4-5 bullet points summarizing status.
+    2. "goalPerformance": 4-5 bullet points comparing actual vs expected.
+    3. "averageAndPrediction": 4-5 bullet points (forecast).
+    4. "suggestions": 3-4 actionable tips.
   `;
 
   try {
+    const ai = getAIClient();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -112,10 +123,10 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
   } catch (error) {
     console.error("Gemini analysis failed", error);
     return {
-      basicAnalysis: ["데이터를 분석하는 중 오류가 발생했습니다.", "잠시 후 다시 시도해주세요."],
-      goalPerformance: ["분석 실패"],
-      averageAndPrediction: ["분석 실패"],
-      suggestions: ["네트워크 상태를 확인해주세요."],
+      basicAnalysis: ["분석 중 오류 발생"],
+      goalPerformance: ["데이터 부족"],
+      averageAndPrediction: ["예측 불가"],
+      suggestions: ["잠시 후 다시 시도해주세요"],
       timestamp: Date.now(),
     };
   }
@@ -123,9 +134,8 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
 
 export const analyzeIntegratedPerformance = async (tasks: Task[], year: number, month?: number): Promise<AnalysisResult> => {
   const isYearly = month === undefined || month === null;
-  const periodLabel = isYearly ? `${year}년` : `${year}년 ${month}월`;
-  const periodType = isYearly ? "Yearly" : "Monthly";
-
+  const periodLabel = isYearly ? `${year}` : `${year}-${month}`;
+  
   const tasksSummary = tasks.map(t => {
       let logsInPeriod;
       if (isYearly) {
@@ -135,27 +145,28 @@ export const analyzeIntegratedPerformance = async (tasks: Task[], year: number, 
       }
       
       const totalInPeriod = logsInPeriod.reduce((acc, l) => acc + l.count, 0);
-      return `- ${t.name}: ${totalInPeriod} units done in ${periodLabel}. Goal: ${t.dailyGoal}/day, ${t.weeklyDays} days/week.`;
+      return `- ${t.name}: ${totalInPeriod} units done. Goal: ${t.dailyGoal}/day.`;
   }).join('\n');
 
   const prompt = `
-    Perform a comprehensive integrated dashboard analysis for the following tasks for ${periodLabel} (${periodType} View).
+    Perform a comprehensive executive dashboard analysis for: ${periodLabel}.
     
     Tasks Data:
     ${tasksSummary}
 
-    IMPORTANT: Wrap key numbers, percentages, or status words (like '양호', '부족', 'Great') in double asterisks like **this** to highlight them.
+    Output Language: KOREAN (Hangul).
 
-    Please provide the response in Korean JSON format with the following 4 arrays, designed for a high-level executive dashboard:
-    1. "basicAnalysis": "Comprehensive Status Analysis" - Overall volume, most active task, general trend.
-    2. "goalPerformance": "Efficiency Metrics" - Efficiency relative to goals, time utilization, work balance.
-    3. "averageAndPrediction": "Goal Achievement Forecast" - Will the user meet goals for this period? What's the outlook?
-    4. "suggestions": "Customized Improvements" - Strategic advice for managing multiple tasks.
+    IMPORTANT: Wrap key numbers or status words in double asterisks like **this**.
 
-    Tone: Professional, Strategic, Executive Summary style.
+    Provide JSON response:
+    1. "basicAnalysis": Overall volume and trends.
+    2. "goalPerformance": Efficiency metrics.
+    3. "averageAndPrediction": Achievement forecast.
+    4. "suggestions": Strategic advice.
   `;
 
   try {
+    const ai = getAIClient();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -173,10 +184,10 @@ export const analyzeIntegratedPerformance = async (tasks: Task[], year: number, 
   } catch (error) {
     console.error("Integrated Gemini analysis failed", error);
     return {
-      basicAnalysis: ["종합 분석을 생성하는 중 오류가 발생했습니다."],
-      goalPerformance: ["데이터가 부족합니다."],
-      averageAndPrediction: ["예측을 생성할 수 없습니다."],
-      suggestions: ["잠시 후 다시 시도해주세요."],
+      basicAnalysis: ["종합 분석 실패"],
+      goalPerformance: ["데이터 부족"],
+      averageAndPrediction: ["예측 불가"],
+      suggestions: ["잠시 후 다시 시도해주세요"],
       timestamp: Date.now(),
     };
   }

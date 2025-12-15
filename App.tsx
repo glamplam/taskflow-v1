@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Task, User } from './types';
 import { TaskForm } from './components/TaskForm';
@@ -9,38 +10,35 @@ import { AIAnalysis } from './components/AIAnalysis';
 import { TaskEditModal } from './components/TaskEditModal';
 import { IntegratedDashboard } from './components/IntegratedDashboard';
 import { AuthForm } from './components/AuthForm';
+import { SupabaseSetup } from './components/SupabaseSetup';
 import { authService } from './services/authService';
-import { LayoutDashboard, CheckSquare, LogOut, User as UserIcon } from 'lucide-react';
+import { isConfigured, resetSupabaseConfig } from './services/supabase';
+import { LayoutDashboard, CheckSquare, LogOut, Loader2, Settings } from 'lucide-react';
 
 const MOCK_TASK: Task = {
   id: '1',
-  name: '인스타그램 릴스제작',
+  name: '예시: 독서하기',
   dailyGoal: 1,
-  weeklyDays: 3,
-  startDate: '2024-01-01',
-  endDate: '2025-12-31',
-  logs: [
-    { date: '2025-05-15', count: 1 },
-    { date: '2025-05-18', count: 1 },
-    { date: '2025-05-22', count: 1 },
-    { date: '2025-05-25', count: 1 },
-    { date: '2025-12-15', count: 1 },
-    { date: '2025-12-18', count: 1 },
-    { date: '2025-12-20', count: 1 },
-    { date: '2025-12-23', count: 1 },
-    { date: '2025-12-25', count: 1 },
-    { date: '2025-12-28', count: 1 },
-  ],
-  createdBy: '관리자'
+  weeklyDays: 7,
+  startDate: new Date().toISOString().split('T')[0],
+  endDate: new Date(new Date().getFullYear() + 1, 11, 31).toISOString().split('T')[0],
+  logs: [],
+  createdBy: 'System'
 };
 
 type ViewMode = 'management' | 'dashboard';
 
 function App() {
+  // 0. Check Configuration First
+  if (!isConfigured) {
+    return <SupabaseSetup />;
+  }
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([MOCK_TASK]);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(MOCK_TASK.id);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<ViewMode>('management');
+  const [isLoadingData, setIsLoadingData] = useState(false);
   
   // View State for Task Detail (Calendar/Stats Month)
   const [viewDate, setViewDate] = useState(new Date());
@@ -49,13 +47,45 @@ function App() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  // 1. Check Session on Mount
   useEffect(() => {
-    // Check for existing session on load
-    const user = authService.getCurrentUser();
-    if (user) {
-      setCurrentUser(user);
-    }
+    const checkUser = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user) {
+          setCurrentUser(user);
+          loadTasks(); // Load data if logged in
+        }
+      } catch (error) {
+        console.error("Session check failed", error);
+      }
+    };
+    checkUser();
   }, []);
+
+  // 2. Load Tasks from Server
+  const loadTasks = async () => {
+    setIsLoadingData(true);
+    try {
+        const loadedTasks = await authService.loadUserTasks();
+        if (loadedTasks.length > 0) {
+            setTasks(loadedTasks);
+            setSelectedTaskId(loadedTasks[0].id);
+        } else {
+            setTasks([MOCK_TASK]); // Default task for empty state
+            setSelectedTaskId(MOCK_TASK.id);
+        }
+    } catch (e) {
+        console.error("Failed to load tasks", e);
+    } finally {
+        setIsLoadingData(false);
+    }
+  };
+
+  // 3. Save Tasks to Server (Debounced or on key actions)
+  const saveTasks = async (newTasks: Task[]) => {
+    await authService.saveUserTasks(newTasks);
+  };
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
@@ -68,18 +98,28 @@ function App() {
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
+    loadTasks();
   };
 
-  const handleLogout = () => {
-    authService.logout();
+  const handleLogout = async () => {
+    await authService.logout();
     setCurrentUser(null);
+    setTasks([]);
+  };
+
+  const handleResetConnection = () => {
+    if (window.confirm('서버 연결 정보를 초기화하시겠습니까? 다시 입력해야 합니다.')) {
+        resetSupabaseConfig();
+    }
   };
 
   const handleAddTask = (task: Task) => {
-    setTasks([...tasks, task]);
+    const newTasks = [...tasks, task];
+    setTasks(newTasks);
     if (!selectedTaskId) {
         setSelectedTaskId(task.id);
     }
+    saveTasks(newTasks);
   };
 
   const handleDeleteTask = (id: string) => {
@@ -88,6 +128,7 @@ function App() {
     if (selectedTaskId === id) {
       setSelectedTaskId(newTasks.length > 0 ? newTasks[0].id : null);
     }
+    saveTasks(newTasks);
   };
 
   const handleOpenEditModal = (task: Task) => {
@@ -101,14 +142,16 @@ function App() {
   };
 
   const handleSaveEditedTask = (updatedTask: Task) => {
-    setTasks(prevTasks => prevTasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+    const newTasks = tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
+    setTasks(newTasks);
     handleCloseEditModal();
+    saveTasks(newTasks);
   };
 
   const handleUpdateLog = (date: string, delta: number) => {
     if (!selectedTaskId) return;
 
-    setTasks(prevTasks => prevTasks.map(task => {
+    const newTasks = tasks.map(task => {
       if (task.id !== selectedTaskId) return task;
 
       const existingLogIndex = task.logs.findIndex(l => l.date === date);
@@ -127,11 +170,35 @@ function App() {
       }
 
       return { ...task, logs: newLogs };
-    }));
+    });
+
+    setTasks(newTasks);
+    saveTasks(newTasks); // Save to DB
   };
 
   if (!currentUser) {
-    return <AuthForm onLoginSuccess={handleLoginSuccess} />;
+    return (
+        <div className="relative">
+             <AuthForm onLoginSuccess={handleLoginSuccess} />
+             <button 
+                onClick={handleResetConnection}
+                className="fixed bottom-4 right-4 text-xs text-gray-500 hover:text-white flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity"
+             >
+                <Settings className="w-3 h-3" /> 서버 재설정
+             </button>
+        </div>
+    );
+  }
+
+  if (isLoadingData) {
+      return (
+          <div className="min-h-screen bg-[#121212] flex items-center justify-center text-white">
+              <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                  <p className="text-gray-400">데이터를 불러오는 중...</p>
+              </div>
+          </div>
+      );
   }
 
   return (
@@ -162,7 +229,7 @@ function App() {
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 text-sm text-gray-300">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg">
-                        {currentUser.name.charAt(0)}
+                        {currentUser.name.charAt(0).toUpperCase()}
                     </div>
                     <span className="hidden md:inline">{currentUser.name}님</span>
                 </div>
