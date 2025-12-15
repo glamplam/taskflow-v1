@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Task, User } from './types';
 import { TaskForm } from './components/TaskForm';
@@ -14,17 +13,6 @@ import { SupabaseSetup } from './components/SupabaseSetup';
 import { authService } from './services/authService';
 import { isConfigured, resetSupabaseConfig } from './services/supabase';
 import { LayoutDashboard, CheckSquare, LogOut, Loader2, Settings } from 'lucide-react';
-
-const MOCK_TASK: Task = {
-  id: '1',
-  name: '예시: 독서하기',
-  dailyGoal: 1,
-  weeklyDays: 7,
-  startDate: new Date().toISOString().split('T')[0],
-  endDate: new Date(new Date().getFullYear() + 1, 11, 31).toISOString().split('T')[0],
-  logs: [],
-  createdBy: 'System'
-};
 
 type ViewMode = 'management' | 'dashboard';
 
@@ -68,15 +56,15 @@ function App() {
     setIsLoadingData(true);
     try {
         const loadedTasks = await authService.loadUserTasks();
+        setTasks(loadedTasks);
         if (loadedTasks.length > 0) {
-            setTasks(loadedTasks);
             setSelectedTaskId(loadedTasks[0].id);
         } else {
-            setTasks([MOCK_TASK]); // Default task for empty state
-            setSelectedTaskId(MOCK_TASK.id);
+            setSelectedTaskId(null);
         }
     } catch (e) {
         console.error("Failed to load tasks", e);
+        setTasks([]);
     } finally {
         setIsLoadingData(false);
     }
