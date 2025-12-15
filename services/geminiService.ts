@@ -1,7 +1,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Task, AnalysisResult } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Safely access API key to prevent runtime ReferenceError if process is not defined
+const getApiKey = () => {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env.API_KEY || '';
+    }
+  } catch (e) {
+    console.warn('Error accessing process.env', e);
+  }
+  return '';
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 const getCommonAnalysisSchema = () => {
   return {
