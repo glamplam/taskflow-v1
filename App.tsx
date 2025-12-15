@@ -10,6 +10,7 @@ import { TaskEditModal } from './components/TaskEditModal';
 import { IntegratedDashboard } from './components/IntegratedDashboard';
 import { AuthForm } from './components/AuthForm';
 import { SupabaseSetup } from './components/SupabaseSetup';
+import { SettingsModal } from './components/SettingsModal';
 import { authService } from './services/authService';
 import { isConfigured, resetSupabaseConfig } from './services/supabase';
 import { LayoutDashboard, CheckSquare, LogOut, Loader2, Settings } from 'lucide-react';
@@ -34,6 +35,9 @@ function App() {
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  // Settings Modal State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // 1. Check Session on Mount
   useEffect(() => {
@@ -168,12 +172,21 @@ function App() {
     return (
         <div className="relative">
              <AuthForm onLoginSuccess={handleLoginSuccess} />
-             <button 
-                onClick={handleResetConnection}
-                className="fixed bottom-4 right-4 text-xs text-gray-500 hover:text-white flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity"
-             >
-                <Settings className="w-3 h-3" /> 서버 재설정
-             </button>
+             <div className="fixed bottom-4 right-4 flex gap-4">
+                 <button 
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="text-xs text-gray-500 hover:text-white flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity"
+                 >
+                    <Settings className="w-3 h-3" /> API 설정
+                 </button>
+                 <button 
+                    onClick={handleResetConnection}
+                    className="text-xs text-gray-500 hover:text-white flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity"
+                 >
+                    <Settings className="w-3 h-3" /> 서버 재설정
+                 </button>
+             </div>
+             <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
         </div>
     );
   }
@@ -221,6 +234,16 @@ function App() {
                     </div>
                     <span className="hidden md:inline">{currentUser.name}님</span>
                 </div>
+                
+                {/* Settings Button */}
+                <button 
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-all"
+                    title="설정"
+                >
+                    <Settings className="w-5 h-5" />
+                </button>
+
                 <button 
                     onClick={handleLogout}
                     className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 px-3 py-1.5 rounded-lg transition-all"
@@ -296,12 +319,17 @@ function App() {
         )}
       </main>
 
-      {/* Edit Modal */}
+      {/* Modals */}
       <TaskEditModal 
         isOpen={isEditModalOpen} 
         task={editingTask} 
         onClose={handleCloseEditModal} 
         onSave={handleSaveEditedTask}
+      />
+
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
       />
     </div>
   );

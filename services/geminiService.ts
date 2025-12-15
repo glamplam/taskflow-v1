@@ -4,14 +4,33 @@ import { Task, AnalysisResult } from "../types";
 // Lazy initialization
 let aiInstance: GoogleGenAI | null = null;
 
-const getAIClient = () => {
-  // The API key must be obtained exclusively from the environment variable process.env.API_KEY
-  // process.env.API_KEY is injected by Vite at build time via define in vite.config.ts.
-  if (!process.env.API_KEY) {
-    throw new Error("API Key가 없습니다. .env 파일을 확인해주세요.");
+// Allow UI to reset the client when the key changes
+export const resetGenAI = () => {
+  aiInstance = null;
+};
+
+const getApiKey = () => {
+  // 1. Check LocalStorage (User entered key)
+  if (typeof window !== 'undefined') {
+    const storedKey = localStorage.getItem('GEMINI_API_KEY');
+    if (storedKey) return storedKey;
   }
+  
+  // 2. Fallback to Environment Variable
+  // process.env.API_KEY is injected by Vite at build time
+  return process.env.API_KEY || '';
+};
+
+const getAIClient = () => {
+  const key = getApiKey();
+  
+  if (!key) {
+    throw new Error("API Key가 없습니다. 우측 상단 설정(⚙️)에서 키를 입력하거나 .env 파일을 확인해주세요.");
+  }
+  
+  // Create new instance if none exists or if the key might have changed (though we rely on resetGenAI for that)
   if (!aiInstance) {
-    aiInstance = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    aiInstance = new GoogleGenAI({ apiKey: key });
   }
   return aiInstance;
 };
@@ -135,7 +154,7 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
       basicAnalysis: [`오류 발생: ${errorMsg}`],
       goalPerformance: ["데이터 부족"],
       averageAndPrediction: ["예측 불가"],
-      suggestions: ["잠시 후 다시 시도하거나 API Key를 확인하세요."],
+      suggestions: ["우측 상단 설정(⚙️)에서 API Key를 확인해주세요."],
       timestamp: Date.now(),
     };
   }
@@ -204,7 +223,7 @@ export const analyzeIntegratedPerformance = async (tasks: Task[], year: number, 
       basicAnalysis: [`종합 분석 오류: ${errorMsg}`],
       goalPerformance: ["데이터 부족"],
       averageAndPrediction: ["예측 불가"],
-      suggestions: ["잠시 후 다시 시도하거나 API Key를 확인하세요."],
+      suggestions: ["우측 상단 설정(⚙️)에서 API Key를 확인해주세요."],
       timestamp: Date.now(),
     };
   }
