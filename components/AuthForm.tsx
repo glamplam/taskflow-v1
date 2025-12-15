@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
 import { authService } from '../services/authService';
@@ -79,7 +78,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
       console.error(err);
       let msg = err.message;
       if (msg === 'Invalid login credentials') msg = '이메일 또는 비밀번호가 잘못되었습니다.';
-      if (msg.includes('already registered')) msg = '이미 가입된 이메일입니다.';
+      if (msg.includes('already registered') || msg.includes('User already registered') || msg.includes('unique constraint')) {
+         msg = '이미 가입된 이메일입니다. 아래 "로그인" 버튼을 눌러 접속해주세요.';
+      }
       setError(msg || '오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -103,7 +104,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
         </div>
 
         {error && (
-          <div className="bg-red-900/30 border border-red-800 text-red-200 px-4 py-3 rounded-lg mb-6 text-sm flex items-start gap-2">
+          <div className="bg-red-900/30 border border-red-800 text-red-200 px-4 py-3 rounded-lg mb-6 text-sm flex items-start gap-2 animate-pulse">
              <span className="mt-0.5 block w-1.5 h-1.5 rounded-full bg-red-400 shrink-0"></span>
              {error}
           </div>
@@ -241,7 +242,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
               <button
                 type="button"
                 onClick={() => handleSwitchMode(isLogin ? 'SIGNUP' : 'LOGIN')}
-                className="text-gray-400 hover:text-white text-sm font-medium transition-colors block w-full"
+                className="text-gray-400 hover:text-white text-sm font-medium transition-colors block w-full p-2 hover:bg-gray-800 rounded-lg"
               >
                 {isLogin ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
               </button>
