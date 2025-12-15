@@ -75,7 +75,7 @@ class GlobalErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBound
       );
     }
 
-    return this.props.children;
+    return (this as any).props.children;
   }
 }
 
