@@ -1,25 +1,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Task, AnalysisResult } from "../types";
 
-// Safely access API key
+// Safely access API key injected by Vite
 const getApiKey = () => {
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      return process.env.API_KEY || '';
-    }
-  } catch (e) {
-    console.warn('Error accessing process.env', e);
-  }
-  return '';
+  // Vite's 'define' plugin will replace process.env.API_KEY with the actual string value during build.
+  // We simply return it. If it's undefined, we return an empty string which will cause a 400 error (handled below).
+  return process.env.API_KEY || '';
 };
 
 // Lazy initialization
 let aiInstance: GoogleGenAI | null = null;
 
 const getAIClient = () => {
+  const key = getApiKey();
+  if (!key) {
+    throw new Error("API Key가 설정되지 않았습니다.");
+  }
   if (!aiInstance) {
-    const key = getApiKey();
-    aiInstance = new GoogleGenAI({ apiKey: key || 'dummy_key' });
+    aiInstance = new GoogleGenAI({ apiKey: key });
   }
   return aiInstance;
 };
@@ -47,6 +45,17 @@ const getCommonAnalysisSchema = () => {
     },
     required: ["basicAnalysis", "goalPerformance", "averageAndPrediction", "suggestions"],
   };
+};
+
+// Helper to clean JSON string (remove markdown code blocks if present)
+const cleanJsonString = (text: string) => {
+  let cleaned = text.trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json/, '').replace(/```$/, '');
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```/, '').replace(/```$/, '');
+  }
+  return cleaned.trim();
 };
 
 export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult> => {
@@ -77,7 +86,6 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
   const remainingDays = Math.max(0, totalDays - daysPassed);
   const requiredDailyAvg = remainingDays > 0 ? (remainingGoal / remainingDays).toFixed(2) : "N/A";
 
-  // Use pure ASCII for the prompt to avoid encoding SyntaxErrors, but ask for Korean output.
   const prompt = `
     Analyze the performance of the task below.
     Generate the output as structured lists of short sentences (bullet points).
@@ -115,15 +123,27 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
       },
     });
 
-    const result = JSON.parse(response.text);
+    const cleanedText = cleanJsonString(response.text);
+    const result = JSON.parse(cleanedText);
     return {
       ...result,
       timestamp: Date.now(),
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini analysis failed", error);
+    
+    // Provide more specific error messages
+    let errorMsg = "분석 중 오류 발생";
+    if (error.message) {
+      if (error.message.includes("API Key")) errorMsg = "API Key 설정 오류";
+      else if (error.message.includes("401") || error.message.includes("403")) errorMsg = "API 키 인증 실패 (권한 없음)";
+      else if (error.message.includes("429")) errorMsg = "요청 한도 초과 (잠시 후 시도)";
+      else if (error.message.includes("500") || error.message.includes("503")) errorMsg = "AI 서버 일시적 장애";
+      else errorMsg = `오류: ${error.message.slice(0, 30)}...`;
+    }
+
     return {
-      basicAnalysis: ["분석 중 오류 발생"],
+      basicAnalysis: [errorMsg],
       goalPerformance: ["데이터 부족"],
       averageAndPrediction: ["예측 불가"],
       suggestions: ["잠시 후 다시 시도해주세요"],
@@ -176,15 +196,25 @@ export const analyzeIntegratedPerformance = async (tasks: Task[], year: number, 
       },
     });
 
-    const result = JSON.parse(response.text);
+    const cleanedText = cleanJsonString(response.text);
+    const result = JSON.parse(cleanedText);
     return {
       ...result,
       timestamp: Date.now(),
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Integrated Gemini analysis failed", error);
+    
+    let errorMsg = "종합 분석 실패";
+    if (error.message) {
+      if (error.message.includes("API Key")) errorMsg = "API Key 설정 오류";
+      else if (error.message.includes("401") || error.message.includes("403")) errorMsg = "API 키 인증 실패";
+      else if (error.message.includes("429")) errorMsg = "요청 한도 초과";
+      else errorMsg = `오류 발생 (${error.message.slice(0, 20)}...)`;
+    }
+
     return {
-      basicAnalysis: ["종합 분석 실패"],
+      basicAnalysis: [errorMsg],
       goalPerformance: ["데이터 부족"],
       averageAndPrediction: ["예측 불가"],
       suggestions: ["잠시 후 다시 시도해주세요"],
