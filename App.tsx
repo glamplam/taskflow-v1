@@ -100,7 +100,7 @@ function App() {
   };
 
   const handleResetConnection = () => {
-    if (window.confirm('서버 연결 정보를 초기화하시겠습니까? 다시 입력해야 합니다.')) {
+    if (window.confirm('서버 연결 설정을 기본값으로 초기화하시겠습니까?')) {
         resetSupabaseConfig();
     }
   };
