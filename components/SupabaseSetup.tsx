@@ -73,6 +73,12 @@ export const SupabaseSetup: React.FC = () => {
                         'sb_publishable...' 키는 지원되지 않습니다. 'ey...'로 시작하는 키를 사용해주세요.
                     </div>
                  )}
+                 {apiKey.startsWith('service_role') && (
+                    <div className="mt-2 text-red-500 text-xs flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        'service_role' 키는 보안상 위험합니다. 반드시 'anon' 키를 사용해주세요.
+                    </div>
+                 )}
               </div>
 
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
