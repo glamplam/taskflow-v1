@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { authService } from '../services/authService';
-import { LogIn, UserPlus, Lock, Mail, User as UserIcon, ArrowLeft, KeyRound, CheckCircle, Loader2 } from 'lucide-react';
+import { LogIn, UserPlus, Lock, Mail, User as UserIcon, ArrowLeft, KeyRound, CheckCircle, Loader2, AlertTriangle, RefreshCw, ExternalLink } from 'lucide-react';
 
 interface AuthFormProps {
   onLoginSuccess: (user: User) => void;
@@ -17,9 +17,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showResend, setShowResend] = useState(false);
 
   // Password Reset Specific States
   const [isVerified, setIsVerified] = useState(false);
+
+  // Get current origin for display
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:xxxx';
 
   const resetState = () => {
     setError('');
@@ -28,6 +32,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
     setPassword('');
     setName('');
     setIsVerified(false);
+    setShowResend(false);
   };
 
   const handleSwitchMode = (newMode: AuthMode) => {
@@ -54,9 +59,24 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleResendSignup = async () => {
+    if (!email) return;
+    setLoading(true);
+    try {
+        await authService.resendSignup(email);
+        setSuccessMessage('인증 메일을 다시 보냈습니다. 받은 편지함을 확인해주세요.');
+        setError('');
+    } catch (err: any) {
+        setError(err.message || '메일 재전송 실패. 잠시 후 다시 시도해주세요.');
+    } finally {
+        setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
@@ -78,10 +98,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
         } catch (loginError: any) {
              // Check for "Email not confirmed" error
              if (loginError.message.includes('Email not confirmed')) {
-                setSuccessMessage('가입 확인 메일이 발송되었습니다. 이메일 인증 후 로그인해주세요.');
-                setMode('LOGIN'); // Switch to login view so they can login after clicking link
+                setSuccessMessage('가입 확인 메일이 발송되었습니다.');
+                setShowResend(true);
+                setMode('LOGIN'); 
              } else {
-                // If auto-login fails for other reasons, ask them to login manually
                 setSuccessMessage('회원가입이 완료되었습니다. 로그인해주세요.');
                 setMode('LOGIN');
              }
@@ -91,6 +111,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
       console.error(err);
       let msg = err.message;
       if (msg === 'Invalid login credentials') msg = '이메일 또는 비밀번호가 잘못되었습니다.';
+      if (msg.includes('Email not confirmed')) {
+          msg = '이메일 인증이 완료되지 않았습니다. 메일을 확인해주세요.';
+          setShowResend(true);
+      }
       if (msg.includes('already registered') || msg.includes('User already registered') || msg.includes('unique constraint')) {
          msg = '이미 가입된 이메일입니다. 로그인해주세요.';
       }
@@ -105,7 +129,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
   const isForgot = mode === 'FORGOT_PASSWORD';
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#121212] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#121212] p-4 font-sans">
       <div className="bg-[#1e1e1e] border border-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md transition-all duration-300">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">TaskFlow</h1>
@@ -119,14 +143,73 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
         {error && (
           <div className="bg-red-900/30 border border-red-800 text-red-200 px-4 py-3 rounded-lg mb-6 text-sm flex items-start gap-2 animate-pulse">
              <span className="mt-0.5 block w-1.5 h-1.5 rounded-full bg-red-400 shrink-0"></span>
-             {error}
+             <div>
+                {error}
+                {showResend && (
+                    <button 
+                        onClick={handleResendSignup}
+                        className="block mt-2 text-xs underline hover:text-white flex items-center gap-1"
+                    >
+                        <RefreshCw className="w-3 h-3" /> 인증 메일 다시 보내기
+                    </button>
+                )}
+             </div>
           </div>
         )}
 
         {successMessage && (
-          <div className="bg-green-900/30 border border-green-800 text-green-200 px-4 py-3 rounded-lg mb-6 text-sm flex items-start gap-2">
-            <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
-            {successMessage}
+          <div className="bg-green-900/20 border border-green-800/50 p-4 rounded-lg mb-6">
+            <div className="flex items-start gap-2 text-green-300 mb-3">
+               <CheckCircle className="w-5 h-5 shrink-0" />
+               <span className="text-sm font-medium">{successMessage}</span>
+            </div>
+            
+            {/* Troubleshooting Guide */}
+            <div className="bg-black/30 rounded p-4 text-xs text-gray-300 space-y-3">
+                <div className="font-bold text-yellow-500 flex items-center gap-1.5 text-sm">
+                    <AlertTriangle className="w-4 h-4" />
+                    메일 링크 오류 해결 방법
+                </div>
+                <p className="leading-relaxed">
+                    링크 클릭 시 <strong>'사이트에 연결할 수 없음'</strong> 오류가 뜬다면 Supabase 설정을 변경해야 합니다.
+                </p>
+                <div className="pl-3 border-l-2 border-gray-600 space-y-1.5">
+                    <div className="flex gap-2">
+                        <span className="font-bold text-gray-400">1.</span> 
+                        <span><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline flex items-center gap-1">Supabase 대시보드 <ExternalLink className="w-3 h-3"/></a> 접속</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <span className="font-bold text-gray-400">2.</span>
+                        <span>좌측 메뉴 <strong>Authentication</strong> (자물쇠 아이콘 🔒) 클릭</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <span className="font-bold text-gray-400">3.</span>
+                        <span><strong>URL Configuration</strong> 메뉴 선택</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <span className="font-bold text-gray-400">4.</span>
+                        <span><strong>Site URL</strong>을 아래 주소로 변경 후 Save</span>
+                    </div>
+                </div>
+                <code className="block bg-black/50 p-2.5 rounded text-blue-300 font-mono break-all select-all text-center border border-gray-700">
+                    {currentOrigin}
+                </code>
+                <div className="pt-2 border-t border-gray-700/50">
+                    <p className="text-gray-400 mb-2">
+                        설정 저장 후, 아래 버튼을 눌러 메일을 다시 받으세요.
+                    </p>
+                    {showResend && (
+                        <button 
+                            onClick={handleResendSignup}
+                            disabled={loading}
+                            className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2.5 rounded flex items-center justify-center gap-2 transition-colors font-medium"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                            새로운 인증 메일 받기
+                        </button>
+                    )}
+                </div>
+            </div>
           </div>
         )}
 

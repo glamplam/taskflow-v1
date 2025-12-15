@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { saveSupabaseConfig } from '../services/supabase';
-import { Database, ArrowRight, ShieldCheck, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Database, ArrowRight, ShieldCheck, HelpCircle, AlertTriangle, Settings } from 'lucide-react';
 
 export const SupabaseSetup: React.FC = () => {
   const [url, setUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  
+  // Get current origin
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:xxxx';
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -15,7 +18,7 @@ export const SupabaseSetup: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#121212] p-6 font-sans">
-      <div className="bg-[#1e1e1e] border border-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row">
+      <div className="bg-[#1e1e1e] border border-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row">
         
         {/* Left Side: Info */}
         <div className="bg-blue-900/20 p-8 md:w-5/12 border-b md:border-b-0 md:border-r border-gray-800 flex flex-col justify-between">
@@ -25,16 +28,30 @@ export const SupabaseSetup: React.FC = () => {
              </div>
              <h2 className="text-2xl font-bold text-white mb-2">서버 연결 설정</h2>
              <p className="text-blue-200/70 text-sm leading-relaxed">
-               데이터를 안전하게 저장하기 위해 Supabase 프로젝트와 연결합니다. 
+               TaskFlow를 시작하려면 Supabase 프로젝트와 연결해야 합니다.
              </p>
            </div>
            
-           <div className="mt-8 space-y-4">
+           <div className="mt-8 space-y-6">
               <div className="flex gap-3">
                  <div className="mt-1 bg-blue-800/50 p-1.5 rounded-lg h-fit"><ShieldCheck className="w-4 h-4 text-blue-300" /></div>
                  <div>
                     <h4 className="text-white text-sm font-bold">안전한 저장</h4>
                     <p className="text-xs text-gray-400 mt-0.5">입력한 키는 브라우저 내부에만 저장됩니다.</p>
+                 </div>
+              </div>
+
+              {/* URL Configuration Warning - Moved here for visibility */}
+              <div className="flex gap-3 bg-yellow-900/20 p-3 rounded-lg border border-yellow-800/50">
+                 <div className="mt-1"><Settings className="w-4 h-4 text-yellow-400" /></div>
+                 <div>
+                    <h4 className="text-yellow-400 text-sm font-bold">필수 설정: Site URL</h4>
+                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                       이메일 인증 링크 오류를 방지하기 위해 Supabase 대시보드에서 <strong>Site URL</strong>을 아래 주소로 꼭 설정해주세요.
+                    </p>
+                    <code className="block mt-2 bg-black/40 p-1.5 rounded text-[10px] text-blue-200 font-mono break-all">
+                        {currentOrigin}
+                    </code>
                  </div>
               </div>
            </div>

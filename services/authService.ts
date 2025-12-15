@@ -31,6 +31,16 @@ export const authService = {
     return data.user;
   },
 
+  resendSignup: async (email: string) => {
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: redirectTo }
+    });
+    if (error) throw error;
+  },
+
   login: async (email: string, password: string): Promise<User> => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
