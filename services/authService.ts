@@ -1,4 +1,3 @@
-
 import { User, Task } from '../types';
 import { supabase } from './supabase';
 
@@ -6,18 +5,27 @@ export const authService = {
   // --- Auth Methods ---
 
   signUp: async (email: string, password: string, name: string) => {
+    // Determine the redirect URL based on the current browser location
+    // This fixes the issue where email links point to localhost when running on other domains
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { name }, // Save name in user metadata
+        emailRedirectTo: redirectTo,
       },
     });
     if (error) throw error;
     
     // Create initial data entry for the user
+    // We use upsert to be safe, though RLS policies usually govern this.
     if (data.user) {
-        await supabase.from('user_data').insert([{ user_id: data.user.id, tasks: [] }]);
+        await supabase.from('user_data').upsert(
+            [{ user_id: data.user.id, tasks: [] }], 
+            { onConflict: 'user_id', ignoreDuplicates: true }
+        );
     }
     
     return data.user;
@@ -61,8 +69,9 @@ export const authService = {
   },
 
   resetPassword: async (email: string) => {
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin, // Redirect back to app after clicking email link
+      redirectTo: redirectTo, // Redirect back to app after clicking email link
     });
     if (error) throw error;
   },

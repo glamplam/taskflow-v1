@@ -70,16 +70,29 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
           return;
         }
         await authService.signUp(email, password, name);
-        // Auto login after signup
-        const user = await authService.login(email, password);
-        onLoginSuccess(user);
+        
+        // Attempt auto-login, but catch errors if email confirmation is required
+        try {
+            const user = await authService.login(email, password);
+            onLoginSuccess(user);
+        } catch (loginError: any) {
+             // Check for "Email not confirmed" error
+             if (loginError.message.includes('Email not confirmed')) {
+                setSuccessMessage('가입 확인 메일이 발송되었습니다. 이메일 인증 후 로그인해주세요.');
+                setMode('LOGIN'); // Switch to login view so they can login after clicking link
+             } else {
+                // If auto-login fails for other reasons, ask them to login manually
+                setSuccessMessage('회원가입이 완료되었습니다. 로그인해주세요.');
+                setMode('LOGIN');
+             }
+        }
       }
     } catch (err: any) {
       console.error(err);
       let msg = err.message;
       if (msg === 'Invalid login credentials') msg = '이메일 또는 비밀번호가 잘못되었습니다.';
       if (msg.includes('already registered') || msg.includes('User already registered') || msg.includes('unique constraint')) {
-         msg = '이미 가입된 이메일입니다. 아래 "로그인" 버튼을 눌러 접속해주세요.';
+         msg = '이미 가입된 이메일입니다. 로그인해주세요.';
       }
       setError(msg || '오류가 발생했습니다.');
     } finally {
@@ -252,4 +265,4 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onLoginSuccess }) => {
       </div>
     </div>
   );
-};
+}
