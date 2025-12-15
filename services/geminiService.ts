@@ -1,23 +1,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Task, AnalysisResult } from "../types";
 
-// Safely access API key injected by Vite
-const getApiKey = () => {
-  // Vite's 'define' plugin will replace process.env.API_KEY with the actual string value during build.
-  // We simply return it. If it's undefined, we return an empty string which will cause a 400 error (handled below).
-  return process.env.API_KEY || '';
-};
-
 // Lazy initialization
 let aiInstance: GoogleGenAI | null = null;
 
 const getAIClient = () => {
-  const key = getApiKey();
-  if (!key) {
-    throw new Error("API Key가 설정되지 않았습니다.");
+  // The API key must be obtained exclusively from the environment variable process.env.API_KEY
+  // process.env.API_KEY is injected by Vite at build time via define in vite.config.ts.
+  if (!process.env.API_KEY) {
+    throw new Error("API Key가 없습니다. .env 파일을 확인해주세요.");
   }
   if (!aiInstance) {
-    aiInstance = new GoogleGenAI({ apiKey: key });
+    aiInstance = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
   return aiInstance;
 };
@@ -50,11 +44,8 @@ const getCommonAnalysisSchema = () => {
 // Helper to clean JSON string (remove markdown code blocks if present)
 const cleanJsonString = (text: string) => {
   let cleaned = text.trim();
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.replace(/^```json/, '').replace(/```$/, '');
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```/, '').replace(/```$/, '');
-  }
+  // Remove markdown code blocks
+  cleaned = cleaned.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '');
   return cleaned.trim();
 };
 
@@ -123,6 +114,11 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
       },
     });
 
+    // Check if response text exists
+    if (!response.text) {
+        throw new Error("AI 응답이 비어있습니다.");
+    }
+
     const cleanedText = cleanJsonString(response.text);
     const result = JSON.parse(cleanedText);
     return {
@@ -132,21 +128,14 @@ export const analyzeTaskPerformance = async (task: Task): Promise<AnalysisResult
   } catch (error: any) {
     console.error("Gemini analysis failed", error);
     
-    // Provide more specific error messages
-    let errorMsg = "분석 중 오류 발생";
-    if (error.message) {
-      if (error.message.includes("API Key")) errorMsg = "API Key 설정 오류";
-      else if (error.message.includes("401") || error.message.includes("403")) errorMsg = "API 키 인증 실패 (권한 없음)";
-      else if (error.message.includes("429")) errorMsg = "요청 한도 초과 (잠시 후 시도)";
-      else if (error.message.includes("500") || error.message.includes("503")) errorMsg = "AI 서버 일시적 장애";
-      else errorMsg = `오류: ${error.message.slice(0, 30)}...`;
-    }
+    // Return the raw error message to the UI for debugging
+    const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
 
     return {
-      basicAnalysis: [errorMsg],
+      basicAnalysis: [`오류 발생: ${errorMsg}`],
       goalPerformance: ["데이터 부족"],
       averageAndPrediction: ["예측 불가"],
-      suggestions: ["잠시 후 다시 시도해주세요"],
+      suggestions: ["잠시 후 다시 시도하거나 API Key를 확인하세요."],
       timestamp: Date.now(),
     };
   }
@@ -195,6 +184,10 @@ export const analyzeIntegratedPerformance = async (tasks: Task[], year: number, 
         responseSchema: getCommonAnalysisSchema(),
       },
     });
+    
+    if (!response.text) {
+        throw new Error("AI 응답이 비어있습니다.");
+    }
 
     const cleanedText = cleanJsonString(response.text);
     const result = JSON.parse(cleanedText);
@@ -205,19 +198,13 @@ export const analyzeIntegratedPerformance = async (tasks: Task[], year: number, 
   } catch (error: any) {
     console.error("Integrated Gemini analysis failed", error);
     
-    let errorMsg = "종합 분석 실패";
-    if (error.message) {
-      if (error.message.includes("API Key")) errorMsg = "API Key 설정 오류";
-      else if (error.message.includes("401") || error.message.includes("403")) errorMsg = "API 키 인증 실패";
-      else if (error.message.includes("429")) errorMsg = "요청 한도 초과";
-      else errorMsg = `오류 발생 (${error.message.slice(0, 20)}...)`;
-    }
+    const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
 
     return {
-      basicAnalysis: [errorMsg],
+      basicAnalysis: [`종합 분석 오류: ${errorMsg}`],
       goalPerformance: ["데이터 부족"],
       averageAndPrediction: ["예측 불가"],
-      suggestions: ["잠시 후 다시 시도해주세요"],
+      suggestions: ["잠시 후 다시 시도하거나 API Key를 확인하세요."],
       timestamp: Date.now(),
     };
   }

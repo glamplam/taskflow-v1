@@ -3,15 +3,15 @@ import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // 현재 작업 디렉토리의 .env 파일 등을 로드합니다.
-  // 세 번째 인자를 ''로 설정하여 VITE_ 접두사가 없는 변수(API_KEY 등)도 로드합니다.
+  // Load env file based on `mode` in the current working directory.
+  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
   const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
     plugins: [react()],
     define: {
-      // 클라이언트 코드에서 process.env.API_KEY를 사용할 수 있도록 값을 주입합니다.
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      // Inject API Key: Check API_KEY first, then VITE_API_KEY
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY),
     },
     build: {
       chunkSizeWarningLimit: 2000,
