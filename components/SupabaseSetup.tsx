@@ -81,7 +81,7 @@ export const SupabaseSetup: React.FC = () => {
                     올바른 키 찾는 법
                  </h5>
                  <ol className="text-xs text-gray-400 space-y-2 list-decimal pl-4">
-                    <li><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Supabase 대시보드</a> > Project Settings (톱니바퀴)</li>
+                    <li><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Supabase 대시보드</a> &gt; Project Settings (톱니바퀴)</li>
                     <li><strong>API</strong> 메뉴 선택</li>
                     <li><strong>Project URL</strong> 복사</li>
                     <li><strong>anon</strong> (public) 키 복사 <br/><span className="text-gray-500">(주의: App Frameworks 탭의 키가 아닙니다)</span></li>
